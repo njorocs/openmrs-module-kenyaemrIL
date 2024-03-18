@@ -17,7 +17,7 @@ import org.openmrs.module.kenyaemrIL.il.utils.MessageHeaderSingleton;
 import org.openmrs.module.metadatadeploy.MetadataUtils;
 import org.openmrs.ui.framework.SimpleObject;
 import org.openmrs.util.PrivilegeConstants;
-
+import org.openmrs.module.kenyaemrIL.util.ServiceDepartments;
 import java.sql.*;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -45,6 +45,7 @@ public class VisualizationDataExchange {
 		Map<String, Integer> visitsMap;
 		Map<String, Integer> diagnosisMap;
 		Map<String, Integer> mortalityMap;
+		Map<String, Integer> workloadMap;
 		List<SimpleObject> diagnosis = new ArrayList<SimpleObject>();
 		List<SimpleObject> workload = new ArrayList<SimpleObject>();
 		List<SimpleObject> billing = new ArrayList<SimpleObject>();
@@ -99,16 +100,19 @@ public class VisualizationDataExchange {
 		} else {
 			payloadObj.put("diagnosis", diagnosis);
 		}
-		if (workload.size() > 0) {
-			SimpleObject workloadObject = new SimpleObject();
-			workloadObject.put("department", "");
-			workloadObject.put("total", "");
-			workload.add(workloadObject);
-			payloadObj.put("workload", workload);
+		visitsMap = allVisits(fetchDate);
+		if (!visitsMap.isEmpty()) {
+			for (Map.Entry<String, Integer> visitEntry : visitsMap.entrySet()) {
+				SimpleObject visitsObject = new SimpleObject();
+				visitsObject.put("visit_type", visitEntry.getKey());
+				visitsObject.put("total", visitEntry.getValue().toString());
+				visits.add(visitsObject);
+			}
+			payloadObj.put("visits", visits);
 		} else {
-			payloadObj.put("workload", workload);
+			payloadObj.put("visits", visits);
 		}
-		billingItems = getBillingItems();
+/*		billingItems = getBillingItems();
 		if (billingItems.size() > 0) {
 			System.out.println("We have some bills");		
 			for (int i = 0; i < billingItems.size(); i++) {
@@ -139,7 +143,7 @@ public class VisualizationDataExchange {
 			}
 		} else {
 			payloadObj.put("payments", payments);
-		}
+		}*/
 		if (inventory.size() > 0) {
 			SimpleObject inventoryObject = new SimpleObject();
 			inventoryObject.put("item_name", "");
@@ -160,13 +164,23 @@ public class VisualizationDataExchange {
 				mortalityObject.put("total", mortalityEntry.getValue().toString());
 				mortality.add(mortalityObject);
 			}
+			payloadObj.put("mortality",mortality);
 		} else {
-			SimpleObject mortalityObject = new SimpleObject();
-			mortalityObject.put("cause_of_death", "");
-			mortalityObject.put("total", "");
-			mortality.add(mortalityObject);
+			payloadObj.put("mortality",mortality);
 		}
-		payloadObj.put("mortality", mortality);
+
+		workloadMap = workLoad(fetchDate);
+        if (!workloadMap.isEmpty()) {
+            for (Map.Entry<String, Integer> workloadEntry : workloadMap.entrySet()) {
+                SimpleObject workloadObject = new SimpleObject();
+				workloadObject.put("department", workloadEntry.getKey());
+				workloadObject.put("total", workloadEntry.getValue().toString());
+                workload.add(workloadObject);
+            }
+			payloadObj.put("workload",workload);
+        } else {
+			payloadObj.put("workload", workload);
+        }
 
 		Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
 		System.out.println("Payload generated: " + payloadObj);
@@ -428,6 +442,48 @@ public class VisualizationDataExchange {
 		}
 		return mortalityMap;
 	}
+
+	public static Map<String, Integer> workLoad(Date midNightDateTime){
+		Map<String, Integer> workLoadMap = new HashMap<>();
+
+		List<Form> serviceUnitsForms = Arrays.asList(
+				MetadataUtils.existing(Form.class, CommonMetadata._Form.CLINICAL_ENCOUNTER),
+				MetadataUtils.existing(Form.class, MchMetadata._Form.MCHCS_FOLLOW_UP),
+				MetadataUtils.existing(Form.class, MchMetadata._Form.MCHMS_ANTENATAL_VISIT),
+				MetadataUtils.existing(Form.class, MchMetadata._Form.MCHMS_POSTNATAL_VISIT),
+				//MetadataUtils.existing(Form.class, MchMetadata._Form.MCHMS_FAMILY_PLANNING),
+				//MetadataUtils.existing(Form.class, CommonMetadata._Form.INPATIENT),
+				MetadataUtils.existing(Form.class, MchMetadata._Form.MCHMS_DELIVERY)
+				//MetadataUtils.existing(Form.class, OTZMetadata._Form.FINANCE) //
+				//MetadataUtils.existing(Form.class, IPDMetadata._Form.IPD_PROCEDURE),
+				//MetadataUtils.existing(Form.class, HivMetadata._Form.SPECIAL_SERVICES), // Labs
+				//MetadataUtils.existing(Form.class, OTZMetadata._Form.PHARMACY) //Dispensing
+				//MetadataUtils.existing(Form.class, OTZMetadata._Form.MORTUARY) //Form Coming up
+				//MetadataUtils.existing(Form.class, OTZMetadata._Form.MEDICAL_RECORDS) //
+
+		);
+
+		List<Encounter> serviceUnitsEncounters = Context.getEncounterService().getEncounters(null, null,
+				midNightDateTime, null, serviceUnitsForms, null, null, null, null, false);
+		if (!serviceUnitsEncounters.isEmpty()) {
+			for (Encounter e : serviceUnitsEncounters) {
+				if (e.getForm().equals(MetadataUtils.existing(Form.class, CommonMetadata._Form.CLINICAL_ENCOUNTER))) {
+					workLoadMap.put(ServiceDepartments.GENERALOUTPATIENT.getDepartmentName(), workLoadMap.getOrDefault(ServiceDepartments.GENERALOUTPATIENT.getDepartmentName(), 0) + 1);
+				}
+				if (e.getForm().equals(MetadataUtils.existing(Form.class, MchMetadata._Form.MCHCS_FOLLOW_UP)) || e.getForm().equals(MetadataUtils.existing(Form.class, MchMetadata._Form.MCHMS_ANTENATAL_VISIT))
+						|| e.getForm().equals(MetadataUtils.existing(Form.class, MchMetadata._Form.MCHMS_POSTNATAL_VISIT))) {
+					workLoadMap.put(ServiceDepartments.MCHANDFAMILYPLANNING.getDepartmentName(), workLoadMap.getOrDefault(ServiceDepartments.MCHANDFAMILYPLANNING.getDepartmentName(), 0) + 1);
+				}
+				if (e.getForm().equals(MetadataUtils.existing(Form.class, MchMetadata._Form.MCHMS_DELIVERY))) {
+					workLoadMap.put(ServiceDepartments.MATERNITY.getDepartmentName(), workLoadMap.getOrDefault(ServiceDepartments.MATERNITY.getDepartmentName(), 0) + 1);
+				}
+			}
+}
+
+		return workLoadMap;
+	}
+
+
 
 }
 
