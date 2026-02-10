@@ -15,12 +15,14 @@ import org.apache.http.util.EntityUtils;
 import org.openmrs.Concept;
 import org.openmrs.Encounter;
 import org.openmrs.Obs;
+import org.openmrs.OpenmrsObject;
 import org.openmrs.Patient;
 import org.openmrs.PatientIdentifier;
 import org.openmrs.PatientIdentifierType;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.kenyaemr.Metadata;
 import org.openmrs.module.kenyaemr.wrapper.PatientWrapper;
+import org.openmrs.module.kenyaemrIL.caseSurveillance.CaseSurveillanceDataExchange;
 import org.openmrs.module.kenyaemrIL.metadata.ILMetadata;
 import org.openmrs.module.metadatadeploy.MetadataUtils;
 import org.slf4j.Logger;
@@ -352,12 +354,49 @@ public class CaseSurveillanceUtils {
     private static final Map<Integer, String> CODED_CONCEPT_ID_TO_LABEL;
     static {
         Map<Integer, String> m = new HashMap<>();
+        //PrEP treatment Plan
         m.put(165203, "Start");
         m.put(1257, "Continue");
         m.put(162904, "Restart");
-        m.put(1256, "Switch");
+        m.put(2032221, "Switch");
         m.put(1260, "Discontinue");
+        //Reasons For starting PrEP
+        m.put(6096, "Sero-Serodiscordant Couples trying to conceive");
+        m.put(5566, "Partner +ve(not on ART, ART last 6mnt, Poor Viral suppression");
+        m.put(5568, "Sex partner(s) high risk; HIV status is unknown, partner multiple sex partners");
+        m.put(5567, "Client has sex with more than one partner");
+        m.put(1000475, "On going IPV/ Violence Screening");
+        m.put(160579, "Engaging in transactional sex");
+        m.put(112992, "Recent STI last 6 months");
+        m.put(1691, "Recurrent use of PEP");
+        m.put(165090, "Injection drug use with shared needles");
+        m.put(165089, "Inconsistent or no condom use during intercourse");
+        m.put(5622, "Other Reasons");
+        //PrEP Type
+        m.put(165269, "Oral");
+        m.put(168050, "CAB-LA");
+        m.put(168049, "Dapivirine ring");
+        m.put(168709, "Lenacapavir");
+        // Reasons For switching PrEP
+        m.put(159737,"Client Preference");
+        m.put(141748,"Drug Interactions");
+        m.put(167533,"Discontinuing Injection PrEP");
+        m.put(121760,"Adverse Drug Reactions");
+        m.put(160662,"Stock-out");
+        m.put(1065,"Yes");
+        m.put(1066,"No");
         CODED_CONCEPT_ID_TO_LABEL = java.util.Collections.unmodifiableMap(m);
+    }
+
+    private static final Map<Integer, String> CODED_CONCEPT_DOSAGE_TYPE_ID_TO_LABEL;
+    static {
+        Map<Integer, String> m = new HashMap<>();
+        //PrEP Dosing Strategy
+        m.put(5424, "Event Driven");
+        m.put(165269, "Daily Oral PrEP");
+        m.put(168050, "Long acting PrEP");
+
+        CODED_CONCEPT_DOSAGE_TYPE_ID_TO_LABEL = java.util.Collections.unmodifiableMap(m);
     }
     public static String getCodedValue(Encounter encounter, String conceptUuid) {
         Obs obs = getObs(encounter, conceptUuid);
@@ -369,8 +408,12 @@ public class CaseSurveillanceUtils {
         Integer codedConceptId = obs.getValueCoded().getConceptId();
         if (codedConceptId != null) {
             String mapped = CODED_CONCEPT_ID_TO_LABEL.get(codedConceptId);
-            if (mapped != null) {
-                return mapped; // "Start", "Continue", "Restart", "Switch", "Discontinue"
+            String mappedDosingType = CODED_CONCEPT_DOSAGE_TYPE_ID_TO_LABEL.get(codedConceptId);
+            if (mapped != null && CaseSurveillanceDataExchange.PrEP_DOSING_STRATEGY.equals(conceptUuid)) {
+                return mappedDosingType;
+            }
+            else if (mapped != null){
+                return mapped;
             }
         }
         // Fallback to the concept name if not in the mapping
@@ -464,5 +507,13 @@ public class CaseSurveillanceUtils {
             }
         }
         return null;
+    }
+    public static <T extends OpenmrsObject> T safeGetMetadata(Class<T> type, String uuid) {
+        try {
+            return MetadataUtils.existing(type, uuid);
+        } catch (Exception e) {
+            log.warn("Metadata not found for type: " + type.getSimpleName() + ", UUID: " + uuid + ". Error: " + e.getMessage());
+            return null;
+        }
     }
 }

@@ -97,8 +97,11 @@ public class CaseSurveillanceDataExchange {
     public static String PrEP_FOLLOWUP_FORM = "ee3e2017-52c0-4a54-99ab-ebb542fb8984";
     public static String PrEP_FOLLOWUP_ENCOUNTER_TYPE = "c4a2be28-6673-4c36-b886-ea89b0a42116";
     public static String PrEP_STATUS = "42ad51f2-dc4f-48eb-8440-9a0bd8969374";
+    public static String PrEP_DOSING_STRATEGY = "166535AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     public static String PrEP_REFILL_FORM = "291c03c8-a216-11e9-a2a3-2a2ae2dbcce4";
     public static String PrEP_REFILL_ENCOUNTER_TYPE = "291c0828-a216-11e9-a2a3-2a2ae2dbcce4";
+    public static String IS_PREGNANT = "5272AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    public static String IS_BREASTFEEDING = "5632AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
     // Utility method for null-safe string extraction
     private static String safeGetField(PersonAddress address, Function<PersonAddress, String> mapper) {
@@ -206,10 +209,13 @@ public class CaseSurveillanceDataExchange {
             String prepMethod,
             Date prepStartDate,
             String prepStatus,
+            String prepDosingStrategy,
             String reasonForStartingPrEP,
             String reasonForSwitchingPrEP,
             Date dateSwitchedPrep,
-            String prepRegimen
+            String prepRegimen,
+            String isPregnant,
+            String isBreastfeeding
 
            ) {
 
@@ -232,9 +238,12 @@ public class CaseSurveillanceDataExchange {
                 "prepType", prepMethod,
                 "prepRegimen", prepRegimen,
                 "prepStatus", prepStatus,
+                "prepDosingStrategy", prepDosingStrategy,
                 "reasonForStartingPrep", reasonForStartingPrEP,
                 "reasonForSwitchingPrep", reasonForSwitchingPrEP,
-                "dateSwitchedPrep", formatDate(dateSwitchedPrep)
+                "dateSwitchedPrep", formatDate(dateSwitchedPrep),
+                "isPregnant", isPregnant,
+                "isBreastfeeding", isBreastfeeding
         );
     }
 
@@ -392,15 +401,15 @@ public class CaseSurveillanceDataExchange {
 
         // Get relevant encounter types
         List<EncounterType> testingEncounterTypes = Arrays.asList(
-                MetadataUtils.existing(EncounterType.class, MchMetadata._EncounterType.MCHMS_CONSULTATION),
-                MetadataUtils.existing(EncounterType.class, CommonMetadata._EncounterType.HTS)
+                safeGetMetadata(EncounterType.class, MchMetadata._EncounterType.MCHMS_CONSULTATION),
+                safeGetMetadata(EncounterType.class, CommonMetadata._EncounterType.HTS)
         );
         List<Form> testingForms = Arrays.asList(
-                MetadataUtils.existing(Form.class, CommonMetadata._Form.HTS_INITIAL_TEST),
-                MetadataUtils.existing(Form.class, CommonMetadata._Form.HTS_CONFIRMATORY_TEST),
-                MetadataUtils.existing(Form.class, MchMetadata._Form.MCHMS_ANTENATAL_VISIT),
-                MetadataUtils.existing(Form.class, MchMetadata._Form.MCHMS_DELIVERY),
-                MetadataUtils.existing(Form.class, MchMetadata._Form.MCHMS_POSTNATAL_VISIT)
+                safeGetMetadata(Form.class, CommonMetadata._Form.HTS_INITIAL_TEST),
+                safeGetMetadata(Form.class, CommonMetadata._Form.HTS_CONFIRMATORY_TEST),
+                safeGetMetadata(Form.class, MchMetadata._Form.MCHMS_ANTENATAL_VISIT),
+                safeGetMetadata(Form.class, MchMetadata._Form.MCHMS_DELIVERY),
+                safeGetMetadata(Form.class, MchMetadata._Form.MCHMS_POSTNATAL_VISIT)
         );
 
         // Build encounter search criteria
@@ -445,10 +454,10 @@ public class CaseSurveillanceDataExchange {
                     continue;
                 }
                 PatientWrapper patientWrapper = new PatientWrapper(patient);
-                Obs obs = patientWrapper.lastObs(MetadataUtils.existing(Concept.class, Metadata.Concept.HIV_DNA_POLYMERASE_CHAIN_REACTION_QUALITATIVE));
+                Obs obs = patientWrapper.lastObs(safeGetMetadata(Concept.class, Metadata.Concept.HIV_DNA_POLYMERASE_CHAIN_REACTION_QUALITATIVE));
 
                 Encounter e = order.getEncounter();
-                if (obs != null && obs.getValueCoded() == MetadataUtils.existing(Concept.class, Metadata.Concept.POSITIVE)) {
+                if (obs != null && obs.getValueCoded() == safeGetMetadata(Concept.class, Metadata.Concept.POSITIVE)) {
                     result.add(mapToTestedPositiveObject(e, patient));
                     processedPatientIds.add(patient.getId());
                 }
@@ -468,9 +477,9 @@ public class CaseSurveillanceDataExchange {
         List<SimpleObject> result = new ArrayList<>();
         EncounterService encounterService = Context.getEncounterService();
 
-        List<EncounterType> linkageEncounterTypes = Arrays.asList(MetadataUtils.existing(EncounterType.class, CommonMetadata._EncounterType.DRUG_REGIMEN_EDITOR),
-                MetadataUtils.existing(EncounterType.class, CommonMetadata._EncounterType.HTS));
-        List<Form> linkageForms = Arrays.asList(MetadataUtils.existing(Form.class, CommonMetadata._Form.DRUG_REGIMEN_EDITOR), MetadataUtils.existing(Form.class, CommonMetadata._Form.HTS_LINKAGE));
+        List<EncounterType> linkageEncounterTypes = Arrays.asList(safeGetMetadata(EncounterType.class, CommonMetadata._EncounterType.DRUG_REGIMEN_EDITOR),
+                safeGetMetadata(EncounterType.class, CommonMetadata._EncounterType.HTS));
+        List<Form> linkageForms = Arrays.asList(safeGetMetadata(Form.class, CommonMetadata._Form.DRUG_REGIMEN_EDITOR), safeGetMetadata(Form.class, CommonMetadata._Form.HTS_LINKAGE));
 
         // Fetch all encounters within the date
         List<Encounter> linkageToCareEncounters = encounterService.getEncounters(new EncounterSearchCriteria(
@@ -569,18 +578,18 @@ public class CaseSurveillanceDataExchange {
 
         // Metadata
         List<EncounterType> htsEncounterType = Collections.singletonList(
-                MetadataUtils.existing(EncounterType.class, CommonMetadata._EncounterType.HTS)
+                safeGetMetadata(EncounterType.class, CommonMetadata._EncounterType.HTS)
         );
         List<Form> htsTestingForms = Arrays.asList(
-                MetadataUtils.existing(Form.class, CommonMetadata._Form.HTS_INITIAL_TEST),
-                MetadataUtils.existing(Form.class, CommonMetadata._Form.HTS_CONFIRMATORY_TEST)
+                safeGetMetadata(Form.class, CommonMetadata._Form.HTS_INITIAL_TEST),
+                safeGetMetadata(Form.class, CommonMetadata._Form.HTS_CONFIRMATORY_TEST)
         );
-        Form htsEligibilityForm = MetadataUtils.existing(Form.class, HTS_ELIGIBILITY_FORM);
+        Form htsEligibilityForm = safeGetMetadata(Form.class, HTS_ELIGIBILITY_FORM);
 
         List<EncounterType> prepRiskAssessmentEncounterType = Collections.singletonList(
-                MetadataUtils.existing(EncounterType.class, PrEP_RISK_ASSESSMENT_ENCOUNTER_UUID)
+                safeGetMetadata(EncounterType.class, PrEP_RISK_ASSESSMENT_ENCOUNTER_UUID)
         );
-        Form prepRiskAssessmentForm = MetadataUtils.existing(Form.class, PrEP_RISK_ASSESSMENT_FORM_UUID);
+        Form prepRiskAssessmentForm = safeGetMetadata(Form.class, PrEP_RISK_ASSESSMENT_FORM_UUID);
 
         // Pull HTS eligibility encounters ON/AFTER effectiveFromDate (driver set)
         List<Encounter> eligibilityEncounters = Optional.ofNullable(encounterService.getEncounters(
@@ -791,25 +800,25 @@ public class CaseSurveillanceDataExchange {
 
         // ---- Metadata (forms/types) ----
         List<EncounterType> htsEncounterType = Collections.singletonList(
-                MetadataUtils.existing(EncounterType.class, CommonMetadata._EncounterType.HTS)
+                safeGetMetadata(EncounterType.class, CommonMetadata._EncounterType.HTS)
         );
         List<Form> htsTestingForms = Arrays.asList(
-                MetadataUtils.existing(Form.class, CommonMetadata._Form.HTS_INITIAL_TEST),
-                MetadataUtils.existing(Form.class, CommonMetadata._Form.HTS_CONFIRMATORY_TEST)
+                safeGetMetadata(Form.class, CommonMetadata._Form.HTS_INITIAL_TEST),
+                safeGetMetadata(Form.class, CommonMetadata._Form.HTS_CONFIRMATORY_TEST)
         );
-        Form htsEligibilityForm = MetadataUtils.existing(Form.class, HTS_ELIGIBILITY_FORM);
+        Form htsEligibilityForm = safeGetMetadata(Form.class, HTS_ELIGIBILITY_FORM);
 
         // PrEP linkage encounters (what we are reporting on/after fetchDate, but still within the 72-hour window)
         List<EncounterType> prepInitialFUPEncounterType = Collections.singletonList(
-                MetadataUtils.existing(EncounterType.class, PrEP_INITIAl_ENCOUNTER)
+                safeGetMetadata(EncounterType.class, PrEP_INITIAl_ENCOUNTER)
         );
-        Form prepInitialForm = MetadataUtils.existing(Form.class, PrEP_INITIAL_FORM);
+        Form prepInitialForm = safeGetMetadata(Form.class, PrEP_INITIAL_FORM);
 
         // PrEP consent source
         List<EncounterType> prepRiskAssessmentEncounterType = Collections.singletonList(
-                MetadataUtils.existing(EncounterType.class, PrEP_RISK_ASSESSMENT_ENCOUNTER_UUID)
+                safeGetMetadata(EncounterType.class, PrEP_RISK_ASSESSMENT_ENCOUNTER_UUID)
         );
-        Form prepRiskAssessmentForm = MetadataUtils.existing(Form.class, PrEP_RISK_ASSESSMENT_FORM_UUID);
+        Form prepRiskAssessmentForm = safeGetMetadata(Form.class, PrEP_RISK_ASSESSMENT_FORM_UUID);
 
         // ---- Pull PrEP linkages on/after effectiveFromDate and within the 72-hour window (driver set) ----
         List<Encounter> prepLinkageEncounters = Optional.ofNullable(encounterService.getEncounters(
@@ -1187,8 +1196,8 @@ public class CaseSurveillanceDataExchange {
         EncounterService encounterService = Context.getEncounterService();
 
         // Get relevant encounter types
-        List<EncounterType> eacEncounterType = Collections.singletonList(MetadataUtils.existing(EncounterType.class, HivMetadata._EncounterType.ENHANCED_ADHERENCE));
-        List<Form> eacForm = Collections.singletonList(MetadataUtils.existing(Form.class, HivMetadata._Form.ENHANCED_ADHERENCE_SCREENING));
+        List<EncounterType> eacEncounterType = Collections.singletonList(safeGetMetadata(EncounterType.class, HivMetadata._EncounterType.ENHANCED_ADHERENCE));
+        List<Form> eacForm = Collections.singletonList(safeGetMetadata(Form.class, HivMetadata._Form.ENHANCED_ADHERENCE_SCREENING));
 
         // Build EAC encounter search criteria
         EncounterSearchCriteria eacSearchCriteria = new EncounterSearchCriteria(
@@ -1212,7 +1221,7 @@ public class CaseSurveillanceDataExchange {
                     continue;
                 }
 
-                PatientIdentifierType upnIdentifierType = MetadataUtils.existing(PatientIdentifierType.class, Metadata.IdentifierType.UNIQUE_PATIENT_NUMBER);
+                PatientIdentifierType upnIdentifierType = safeGetMetadata(PatientIdentifierType.class, Metadata.IdentifierType.UNIQUE_PATIENT_NUMBER);
                 PatientIdentifier upnIdentifier = patient.getPatientIdentifier(upnIdentifierType);
                 String upn = upnIdentifier != null ? upnIdentifier.getIdentifier() : null;
 
@@ -1241,8 +1250,8 @@ public class CaseSurveillanceDataExchange {
         EncounterService encounterService = Context.getEncounterService();
 
         // Get relevant encounter types
-        List<EncounterType> heiEncounterType = Collections.singletonList(MetadataUtils.existing(EncounterType.class, MchMetadata._EncounterType.MCHCS_ENROLLMENT));
-        List<Form> heiEnrollmentForm = Collections.singletonList(MetadataUtils.existing(Form.class, MchMetadata._Form.MCHCS_ENROLLMENT));
+        List<EncounterType> heiEncounterType = Collections.singletonList(safeGetMetadata(EncounterType.class, MchMetadata._EncounterType.MCHCS_ENROLLMENT));
+        List<Form> heiEnrollmentForm = Collections.singletonList(safeGetMetadata(Form.class, MchMetadata._Form.MCHCS_ENROLLMENT));
 
         // Build HEI encounter search criteria
         EncounterSearchCriteria heiSearchCriteria = new EncounterSearchCriteria(
@@ -1270,8 +1279,8 @@ public class CaseSurveillanceDataExchange {
         EncounterService encounterService = Context.getEncounterService();
 
         // Get relevant encounter types
-        List<EncounterType> heiEncounterType = Collections.singletonList(MetadataUtils.existing(EncounterType.class, MchMetadata._EncounterType.MCHCS_ENROLLMENT));
-        List<Form> heiEnrollmentForm = Collections.singletonList(MetadataUtils.existing(Form.class, MchMetadata._Form.MCHCS_ENROLLMENT));
+        List<EncounterType> heiEncounterType = Collections.singletonList(safeGetMetadata(EncounterType.class, MchMetadata._EncounterType.MCHCS_ENROLLMENT));
+        List<Form> heiEnrollmentForm = Collections.singletonList(safeGetMetadata(Form.class, MchMetadata._Form.MCHCS_ENROLLMENT));
 
         // Build HEI encounter search criteria
         EncounterSearchCriteria heiSearchCriteria = new EncounterSearchCriteria(
@@ -1288,7 +1297,7 @@ public class CaseSurveillanceDataExchange {
 
                     PatientWrapper patientWrapper = new PatientWrapper(patient);
 
-                    Obs obs = patientWrapper.lastObs(MetadataUtils.existing(Concept.class, Metadata.Concept.HIV_DNA_POLYMERASE_CHAIN_REACTION_QUALITATIVE));
+                    Obs obs = patientWrapper.lastObs(safeGetMetadata(Concept.class, Metadata.Concept.HIV_DNA_POLYMERASE_CHAIN_REACTION_QUALITATIVE));
 
                     if (obs == null || obs.getValueCoded() == null) {
                         result.add(mapToHEIDnaPcrObject(heiEncounter, patient, heiNumber));
@@ -1314,9 +1323,9 @@ public class CaseSurveillanceDataExchange {
         EncounterService encounterService = Context.getEncounterService();
 
         // Pre-fetch metadata (avoid repeated calls inside loop)
-        EncounterType heiEncounterType = MetadataUtils.existing(EncounterType.class, MchMetadata._EncounterType.MCHCS_ENROLLMENT);
-        Form heiEnrollmentForm = MetadataUtils.existing(Form.class, MchMetadata._Form.MCHCS_ENROLLMENT);
-        Concept hivStatusConcept = MetadataUtils.existing(Concept.class, Metadata.Concept.HIV_STATUS);
+        EncounterType heiEncounterType = safeGetMetadata(EncounterType.class, MchMetadata._EncounterType.MCHCS_ENROLLMENT);
+        Form heiEnrollmentForm = safeGetMetadata(Form.class, MchMetadata._Form.MCHCS_ENROLLMENT);
+        Concept hivStatusConcept = safeGetMetadata(Concept.class, Metadata.Concept.HIV_STATUS);
 
         // Compute a birthdate cutoff for 24 months to filter before loading all encounters
         LocalDate contextLocal = fetchDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
@@ -1377,11 +1386,11 @@ public class CaseSurveillanceDataExchange {
 
         // Discontinuation forms where death details may be captured as Obs
         List<Form> discForms = Arrays.asList(
-                MetadataUtils.existing(Form.class, HivMetadata._Form.HIV_DISCONTINUATION),
-                MetadataUtils.existing(Form.class, MchMetadata._Form.MCHCS_DISCONTINUATION),
-                MetadataUtils.existing(Form.class, MchMetadata._Form.MCHMS_DISCONTINUATION),
-                MetadataUtils.existing(Form.class, MchMetadata._Form.MCHCS_HEI_COMPLETION),
-                MetadataUtils.existing(Form.class, OTZMetadata._Form.OTZ_DISCONTINUATION_FORM)
+                safeGetMetadata(Form.class, HivMetadata._Form.HIV_DISCONTINUATION),
+                safeGetMetadata(Form.class, MchMetadata._Form.MCHCS_DISCONTINUATION),
+                safeGetMetadata(Form.class, MchMetadata._Form.MCHMS_DISCONTINUATION),
+                safeGetMetadata(Form.class, MchMetadata._Form.MCHCS_HEI_COMPLETION),
+                safeGetMetadata(Form.class, OTZMetadata._Form.OTZ_DISCONTINUATION_FORM)
         );
 
         // Pull discontinuation encounters since fetchDate (source for death obs)
@@ -1498,23 +1507,23 @@ public class CaseSurveillanceDataExchange {
         List<SimpleObject> result = new ArrayList<>();
 
         // --- Metadata (resolve once) ---
-        Form prepEnrollmentForm = MetadataUtils.existing(Form.class, PREP_ENROLLMENT_FORM);
-        Form prepInitiationForm = MetadataUtils.existing(Form.class, PREP_INITIATION_FORM);
+        Form prepEnrollmentForm = safeGetMetadata(Form.class, PREP_ENROLLMENT_FORM);
+        Form prepInitiationForm = safeGetMetadata(Form.class, PREP_INITIATION_FORM);
 
         EncounterType prepEnrollmentEncounterType =
-                MetadataUtils.existing(EncounterType.class, PREP_ENROLLMENT_ENC_TYPE);
+                safeGetMetadata(EncounterType.class, PREP_ENROLLMENT_ENC_TYPE);
 
-        Form prepInitialForm = MetadataUtils.existing(Form.class, PrEP_INITIAL_FORM);
+        Form prepInitialForm = safeGetMetadata(Form.class, PrEP_INITIAL_FORM);
         EncounterType prepInitialEncounterType =
-                MetadataUtils.existing(EncounterType.class, PrEP_INITIAl_ENCOUNTER);
+                safeGetMetadata(EncounterType.class, PrEP_INITIAl_ENCOUNTER);
 
-        List<Form> prepVisitForms = Arrays.asList(
-                MetadataUtils.existing(Form.class, PrEP_FOLLOWUP_FORM),
-                MetadataUtils.existing(Form.class, PrEP_REFILL_FORM)
+        List<Form> prepVisitForms = Arrays.asList(  
+                safeGetMetadata(Form.class, PrEP_FOLLOWUP_FORM),
+                safeGetMetadata(Form.class, PrEP_REFILL_FORM)
         );
         List<EncounterType> prepVisitEncounterTypes = Arrays.asList(
-                MetadataUtils.existing(EncounterType.class, PrEP_FOLLOWUP_ENCOUNTER_TYPE),
-                MetadataUtils.existing(EncounterType.class, PrEP_REFILL_ENCOUNTER_TYPE)
+                safeGetMetadata(EncounterType.class, PrEP_FOLLOWUP_ENCOUNTER_TYPE),
+                safeGetMetadata(EncounterType.class, PrEP_REFILL_ENCOUNTER_TYPE)
         );
 
         // Enrollment-related forms
@@ -1645,10 +1654,15 @@ public class CaseSurveillanceDataExchange {
                     getCodedValue(latestEnrollmentAllTime, PrEP_STATUS)
             );
 
+            String prepDosingStrategy = firstNonBlank(
+                    getCodedValue(sourceEncounter, PrEP_DOSING_STRATEGY),
+                    getCodedValue(latestEnrollmentAllTime, PrEP_DOSING_STRATEGY)
+            );
+
             String reasonForSwitching = firstNonBlank(
                     getCodedValue(sourceEncounter, REASON_FOR_SWITCHING_PrEP),
                     getCodedValue(latestEnrollmentAllTime, REASON_FOR_SWITCHING_PrEP),
-                    (latestInitialAllTime != null ? getCodedValue(latestInitialAllTime, REASON_FOR_SWITCHING_PrEP) : null)
+                    (latestInitialAllTime != null ? getCodedValue(latestInitialAllTime, REASON_FOR_SWITCHING_PrEP) : "")
             );
 
             Date dateSwitchedPrep = firstNonNull(
@@ -1660,18 +1674,24 @@ public class CaseSurveillanceDataExchange {
             String prepMethod = firstNonBlank(
                     getCodedValue(sourceEncounter, TYPE_OF_PrEP),
                     getCodedValue(latestEnrollmentAllTime, TYPE_OF_PrEP),
-                    (latestInitialAllTime != null ? getCodedValue(latestInitialAllTime, TYPE_OF_PrEP) : null)
+                    (latestInitialAllTime != null ? getCodedValue(latestInitialAllTime, TYPE_OF_PrEP) : "")
             );
 
             String prepRegimen = firstNonBlank(
                     getCodedValue(sourceEncounter, PrEP_REGIMEN),
                     getCodedValue(latestEnrollmentAllTime, PrEP_REGIMEN),
-                    (latestInitialAllTime != null ? getCodedValue(latestInitialAllTime, PrEP_REGIMEN) : null)
+                    (latestInitialAllTime != null ? getCodedValue(latestInitialAllTime, PrEP_REGIMEN) : "")
             );
 
             String reasonForStartingPrep = CaseSurveillanceUtils.getCodedValue(
                     initialForReason,
                     REASON_FOR_STARTING_PrEP
+            );
+            String isPregnant = firstNonBlank(getCodedValue(sourceEncounter, IS_PREGNANT),
+                    (latestInitialAllTime != null ? getCodedValue(latestInitialAllTime, IS_PREGNANT) : "")
+            );
+            String isBreastfeeding = firstNonBlank(getCodedValue(sourceEncounter, IS_BREASTFEEDING),
+                    (latestInitialAllTime != null ? getCodedValue(latestInitialAllTime, IS_BREASTFEEDING) : "")
             );
             if (prepStartDate == null) {
                 prepStartDate = latestEnrollmentAllTime.getEncounterDatetime();
@@ -1683,10 +1703,13 @@ public class CaseSurveillanceDataExchange {
                     prepMethod,
                     prepStartDate,
                     prepStatus,
+                    prepDosingStrategy,
                     reasonForStartingPrep,
                     reasonForSwitching,
                     dateSwitchedPrep,
-                    prepRegimen
+                    prepRegimen,
+                    isPregnant,
+                    isBreastfeeding
             ));
         }
 
@@ -1843,6 +1866,8 @@ public class CaseSurveillanceDataExchange {
             event.put("dateSwitchedPrep", getStringValue.apply("dateSwitchedPrep"));
             event.put("prepType", getStringValue.apply("prepType"));
             event.put("prepRegimen", getStringValue.apply("prepRegimen"));
+            event.put("isPregnant", getStringValue.apply("isPregnant"));
+            event.put("isBreastfeeding", getStringValue.apply("isBreastfeeding"));
         }
         // Combine client and event with eventType
         Map<String, Object> result = new HashMap<>();
